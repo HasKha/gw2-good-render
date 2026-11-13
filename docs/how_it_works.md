@@ -13,9 +13,12 @@ So the subscribers are a table in shared memory, and the service calls each one 
 - **The block** is a named file mapping, `GW2GoodRender.v1.<pid>`, made zeroed by the first side to open it. Every
   side opens it for itself, whichever loads first, and all zeroes is an empty block with no service, so nobody sets it
   up. Its layout never changes: `v1` is the layout, and a new one would be a new name.
-  - It is not Nexus's DataLink, though that is a named file mapping too. `DataLink.Share` zeroes the memory even when it
-    opens a mapping that already exists, which would wipe the subscribers of a block another side made first.
-  - A plain mapping also works for an addon that is not loaded by Nexus.
+  - It is not Nexus's DataLink. An addon's `DataLink.Share` makes the resource in Nexus's own memory, not a file
+    mapping (`Core/DataLink/DlApi.cpp`, called with `aIsPublic` false), so only addons loaded by Nexus reach it. One
+    side is not: Community Challenge Mode can also be loaded by arcdps, or as a `d3d11.dll` proxy, and coordinates
+    through the same block.
+  - That memory is also not zeroed (`new char[size]`), while the block depends on starting zeroed. `Share` returns
+    the same pointer to whoever asks, first or not, so a side cannot tell whether it is the one to clear it.
 - **A subscriber** claims a slot with an atomic compare-and-swap, and leaves an order, its header's
   `MOMENT_VERSION` and a callback in it, the callback last.
 - **The service says which versions it calls**, in `oldest_served` and `newest_served`, and skips the slots of any
