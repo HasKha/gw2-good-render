@@ -22,8 +22,10 @@ What each field and call does is written beside it in the header.
 
 ### Subscribing
 
-Subscribe at load and unsubscribe at unload. The service does not need to be loaded first: a subscriber that loads
-before it is called once it comes.
+You must subscribe at load and unsubscribe at unload. If you don't unsubscribe, the service may call bad memory and cause a crash.
+
+The service (goodrender.dll) does not need to be loaded first. Addons can be loaded in any order.
+Once the service is loaded, it will start firing callbacks at existing and new subscribers.
 
 ```cpp
 #include "good_render.h"
