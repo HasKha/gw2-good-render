@@ -2,7 +2,6 @@
 
 #include <windows.h>
 
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cwchar>
@@ -137,7 +136,9 @@ struct Slot {
     // Subscribers are called in ascending order, ties in slot order: what draws over the others draws last.
     int32_t order;
     std::atomic<Callback> callback;
-    // Calls into the slot in progress, counted by the service before it reads the callback.
+    // Calls into the slot in progress, counted by the service before it reads the callback and after the call returns,
+    // and after whatever the service draws for it: so once unsubscribe() sees zero, nothing of the subscriber's is in
+    // use.
     std::atomic<uint32_t> calls;
 };
 
@@ -221,49 +222,6 @@ inline void unsubscribe(Slot& slot) {
         Sleep(5);
     }
     slot.claimed.store(0);
-}
-
-// ---- The service
-
-// Calls every subscriber with `moment`, in order, and `after_each` after each call. A slot's call is counted before its
-// callback is read, so unsubscribe() can wait it out. `after_each` runs inside the count, so whatever the call left for
-// the service to draw, textures of the subscriber's included, is drawn before the subscriber can unload.
-inline void callSubscribers(Block& block, const Moment& moment, void (*after_each)(const Moment&) = nullptr) {
-    Slot* ordered[MOST_SUBSCRIBERS];
-    int count = 0;
-    for (Slot& slot : block.slots) {
-        if (slot.claimed.load() != 0) {
-            ordered[count++] = &slot;
-        }
-    }
-    std::stable_sort(ordered, ordered + count, [](const Slot* a, const Slot* b) { return a->order < b->order; });
-    for (int i = 0; i < count; ++i) {
-        Slot& slot = *ordered[i];
-        slot.calls.fetch_add(1);
-        if (const Callback callback = slot.callback.load()) {
-            callback(&moment);
-            if (after_each != nullptr) {
-                after_each(moment);
-            }
-        }
-        slot.calls.fetch_sub(1);
-    }
-}
-
-// Frees the slot of any subscriber whose module is gone without unsubscribing -- one that crashed in its unload, or
-// has none -- so it is never called into freed memory. The service's, once a frame, outside a moment.
-inline void dropUnloadedSubscribers(Block& block) {
-    for (Slot& slot : block.slots) {
-        HMODULE module = nullptr;
-        const Callback callback = slot.callback.load();
-        if (callback != nullptr &&
-            !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)callback, &module)) {
-            Callback expected = callback;
-            if (slot.callback.compare_exchange_strong(expected, nullptr)) {
-                slot.claimed.store(0);
-            }
-        }
-    }
 }
 
 } // namespace good_render
