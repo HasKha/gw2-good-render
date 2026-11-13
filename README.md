@@ -75,33 +75,18 @@ void OnMoment(const good_render::Moment* moment) {
 
 ### Drawing ImGui
 
-No ImGui frame is open during a moment, so fill a draw list of your own and hand it to `moment->draw_list`.
+`moment->draw_list` is an empty ImGui draw list, ready to draw into like Nexus's background list. The service draws it
+once your callback returns.
 
 ```cpp
-ImDrawList* MomentDrawList = nullptr;
 bool DrawnInMoment = false;
 
 void OnMoment(const good_render::Moment* moment) {
     if (moment->moment != good_render::MOMENT_BEFORE_WINDOWS) {
         return;
     }
-    if (MomentDrawList == nullptr) {
-        MomentDrawList = IM_NEW(ImDrawList)(ImGui::GetDrawListSharedData());
-    }
-    MomentDrawList->_ResetForNewFrame();
-    MomentDrawList->PushTextureID(ImGui::GetIO().Fonts->TexID);
-    MomentDrawList->PushClipRectFullScreen();
-
-    DrawMyThings(MomentDrawList);
-
-    moment->draw_list(MomentDrawList);
+    DrawMyThings(moment->draw_list);
     DrawnInMoment = true;
-}
-
-void AddonUnload() {
-    // after unsubscribe()
-    IM_DELETE(MomentDrawList);
-    MomentDrawList = nullptr;
 }
 ```
 
@@ -148,7 +133,7 @@ bool ToScreen(const good_render::Camera& camera, const glm::vec3& world, ImVec2&
 }
 ```
 
-The matrices are column-major (`glm::make_mat4` takes them as they are). The projection uses the scene's aspect, not
+The matrices are column-major. `glm::make_mat4` and DirectXMath's `XMLoadFloat4x4` both take them as they are. The projection uses the scene's aspect, not
 the window's. Below the monitor's resolution the two differ, and the scene is stretched over the window. The
 projection's near and far planes are not the game's. To test against the game's depth, compare view depths:
 `clip.w` against `linear_depth * moment->z_far`.

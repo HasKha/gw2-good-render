@@ -49,8 +49,8 @@ enum MomentId : uint32_t {
 // camera read then is a frame ahead of the world it would draw over, and shapes on the ground slip while zooming. This is
 // MumbleLink as it was at the previous Present, which is what the frame was drawn with.
 //
-// The matrices are column-major, element [column * 4 + row], so clip = matrix * (x, y, z, 1): glm::make_mat4() takes
-// them as they are, DirectXMath's XMLoadFloat4x4() transposed.
+// The matrices are column-major, element [column * 4 + row], so clip = matrix * (x, y, z, 1). Both glm::make_mat4() and
+// DirectXMath's XMLoadFloat4x4() take them as they are: DirectXMath's row vectors, v * M, read the same memory the same way.
 struct Camera {
     float position[3];
     float front[3];  // unit length
@@ -93,12 +93,13 @@ struct Moment {
     ID3D11ShaderResourceView* mask;
     // Opaque geometry's view depth over z_far, an R32_FLOAT; sky reads 1.
     ID3D11ShaderResourceView* linear_depth;
-    // Draws `list` into what is bound, as Nexus would at Present: laid out in the window's pixels, as ImGui's own lists
-    // are, and scaled to the moment; each command textured by its TextureId, an ID3D11ShaderResourceView*. Colour only.
-    // Clip rectangles and user callbacks are not honoured. The list is ImGui 1.80's, Nexus's, which every Nexus addon
-    // shares; it need not belong to a frame, so a subscriber may fill one of its own in the call. Puts back the state
-    // it changes. Only during the call.
-    void (*draw_list)(const ImDrawList* list);
+    // An empty list for the subscriber to draw into, as into Nexus's background list: started as ImGui starts its own,
+    // with the font atlas's texture and a full-screen clip rectangle, laid out in the window's pixels. The service draws
+    // it into what is bound once the callback returns, scaled to the moment: each command textured by its TextureId, an
+    // ID3D11ShaderResourceView*, colour only, with clip rectangles and user callbacks not honoured. The list is ImGui
+    // 1.80's, Nexus's, which every Nexus addon shares, and grows through Nexus's allocator, as every Nexus addon's ImGui
+    // does. Only during the call.
+    ImDrawList* draw_list;
 };
 
 using Callback = void (*)(const Moment* moment);
@@ -135,7 +136,7 @@ struct Block {
 };
 
 // "GDRENDER" with the version in the low byte. Raised whenever Block or Moment changes.
-constexpr uint64_t HEADER = 0x4744'5245'4E44'4500ull | 2;
+constexpr uint64_t HEADER = 0x4744'5245'4E44'4500ull | 1;
 
 static_assert(std::atomic<uint64_t>::is_always_lock_free && std::atomic<uint32_t>::is_always_lock_free &&
                   std::atomic<Callback>::is_always_lock_free,
@@ -209,9 +210,10 @@ inline void unsubscribe(Slot& slot) {
 
 // ---- The service
 
-// Calls every subscriber with `moment`, in order. A slot's call is counted before its callback is read, so
-// unsubscribe() can wait it out.
-inline void callSubscribers(Block& block, const Moment& moment) {
+// Calls every subscriber with `moment`, in order, and `after_each` after each call. A slot's call is counted before its
+// callback is read, so unsubscribe() can wait it out. `after_each` runs inside the count, so whatever the call left for
+// the service to draw, textures of the subscriber's included, is drawn before the subscriber can unload.
+inline void callSubscribers(Block& block, const Moment& moment, void (*after_each)(const Moment&) = nullptr) {
     Slot* ordered[MOST_SUBSCRIBERS];
     int count = 0;
     for (Slot& slot : block.slots) {
@@ -225,6 +227,9 @@ inline void callSubscribers(Block& block, const Moment& moment) {
         slot.calls.fetch_add(1);
         if (const Callback callback = slot.callback.load()) {
             callback(&moment);
+            if (after_each != nullptr) {
+                after_each(moment);
+            }
         }
         slot.calls.fetch_sub(1);
     }

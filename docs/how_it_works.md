@@ -18,9 +18,10 @@ So the subscribers are a table in shared memory, and the service calls each one 
 - **A subscriber** claims a slot with an atomic compare-and-swap, and leaves a callback and an order in it.
 - **The service counts each call into a slot before it reads the slot's callback.** So `unsubscribe()` can clear the
   callback, then wait for the count to drop to zero, and the subscriber can unload as soon as it returns.
-- **The service never hands out a pointer into itself**, except `draw_list`, which is valid only during a call. Once a
-  frame, outside any moment, it frees the slot of any subscriber whose module is gone without unsubscribing, so it is
-  never called into freed memory.
+- **The service never hands out a pointer into itself**, except `draw_list`, which is valid only during a call, and
+  which it draws before the call is counted out, so the textures it names may be the subscriber's own.
+- **Once a frame, outside any moment, the service frees the slot of any subscriber whose module is gone** without
+  unsubscribing, so it never calls into freed memory.
 
 ## One follower of the frame at a time
 
