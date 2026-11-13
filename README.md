@@ -47,8 +47,8 @@ void AddonUnload() {
 }
 ```
 
-- **`open()`** returns no block when the block in the process is another version's (see [Versions](#versions)).
-  Treat that as the service not being there.
+- **`open()`** returns no block only when Windows could not make the mapping. Treat that as the service not being
+  there.
 - **The order** decides who draws over whom. Subscribers are called in ascending order, so the highest draws last.
   Use `0` unless you have a reason not to. Community Challenge Mode uses `1000`, so that its mechanics read over
   everything else.
@@ -188,14 +188,19 @@ they are a different size from what is bound, so sample them by the screen's fra
 
 ### How it works
 
-[docs/how_it_works.md](docs/how_it_works.md) covers the shared block, why it is not a Nexus event, and how frame
-ownership is handed over. Read it if your addon follows the game's frame itself.
+[docs/how_it_works.md](docs/how_it_works.md) covers the shared block, and why it is not a Nexus event.
 
 ## Versions
 
-Releases are tagged `vMajor.Minor.Build`, the form Nexus's updater reads. The block's own version is the low byte of
-`good_render::HEADER`, and it is raised whenever `Block` or `Moment` changes.
+Releases are tagged `vMajor.Minor.Build`, the form Nexus's updater reads.
 
-Sides of different versions never share a block: the first to open it sets its version, and every other side's
-`open()` returns no block. A subscriber built against another version's header falls back to Nexus. If it was loaded
-before the service, it holds the block, and the service draws for nobody until that subscriber is rebuilt.
+Every addon shares one block, whatever header it was built against. Each subscriber's slot carries the
+`good_render::MOMENT_VERSION` of its header, and the service calls the versions it can hand its `Moment` to: its own,
+and older ones down to the oldest it still supports. `Moment` only grows at its end, so an older subscriber reads only
+the fields it knows.
+
+- **A subscriber the service does not serve is not called**, newer than the service or older than what it supports,
+  and draws through Nexus as it would without the service. `good_render::served(*block)` says whether yours is called
+  right now, for a message to your users.
+- **An older header is deprecated** once a newer one is out: build against the latest, since an older one stops being
+  served when `Moment` changes in a way it cannot follow.
