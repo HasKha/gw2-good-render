@@ -100,6 +100,21 @@ struct Moment {
     // 1.80's, Nexus's, which every Nexus addon shares, and grows through Nexus's allocator, as every Nexus addon's ImGui
     // does. Only during the call.
     ImDrawList* draw_list;
+
+    // ImGui's textured quad, at points in the world rather than on the screen: MumbleLink's metres, as the camera's.
+    // Hidden pixel by pixel behind whatever the game drew opaque in front of it -- a wall, a hill, a character --
+    // which draw_list never is. Drawn after the callback returns, before draw_list, in the order called.
+    //
+    // `texture` is what ImGui's AddImageQuad() takes, an ID3D11ShaderResourceView*, or null for a plain colour;
+    // `colour` is IM_COL32's. The corners go round the quad, either way, uvs[i] at corners[i]; null uvs are the whole
+    // texture, (0,0) (1,0) (1,1) (0,1). Points that are not finite drop the quad. As draw_list's, the
+    // texture must stay alive until the call has been drawn: until unsubscribe() returns.
+    //
+    // Null outside the world -- from BEFORE_WINDOWS on -- and with no camera: draw on draw_list then.
+    void (*world_quad)(const float corners[4][3], const float uvs[4][2], void* texture, uint32_t colour);
+    // world_quad's quad standing upright to the camera, as an icon in the world: the whole texture, `half_width` and
+    // `half_height` metres from `centre` each way. Null when world_quad is.
+    void (*world_billboard)(const float centre[3], float half_width, float half_height, void* texture, uint32_t colour);
 };
 
 using Callback = void (*)(const Moment* moment);
@@ -136,7 +151,7 @@ struct Block {
 };
 
 // "GDRENDER" with the version in the low byte. Raised whenever Block or Moment changes.
-constexpr uint64_t HEADER = 0x4744'5245'4E44'4500ull | 1;
+constexpr uint64_t HEADER = 0x4744'5245'4E44'4500ull | 2;
 
 static_assert(std::atomic<uint64_t>::is_always_lock_free && std::atomic<uint32_t>::is_always_lock_free &&
                   std::atomic<Callback>::is_always_lock_free,

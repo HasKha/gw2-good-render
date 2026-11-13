@@ -93,6 +93,37 @@ void OnMoment(const good_render::Moment* moment) {
 Positions are in the window's pixels, as in any ImGui list, at every moment. Clip rectangles and user callbacks are not
 honoured.
 
+### Drawing in the world
+
+A draw list is flat: it draws over everything, so a shape behind a wall shows through it. At the world's moments,
+`moment->world_quad` and `moment->world_billboard` draw ImGui's textured quads at points in the world instead, in
+MumbleLink's metres. Each pixel is hidden wherever the game drew something solid in front of it, with no depth to
+handle on your side.
+
+```cpp
+void OnMoment(const good_render::Moment* moment) {
+    if (moment->moment != good_render::MOMENT_WORLD_FINISHED || !moment->world_quad) {
+        return;
+    }
+    // A strip on the ground from a to b: the four corners go round the quad, uvs[i] at corners[i].
+    const float corners[4][3] = {{a.x - side.x, a.y, a.z - side.z}, {b.x - side.x, b.y, b.z - side.z},
+                                 {b.x + side.x, b.y, b.z + side.z}, {a.x + side.x, a.y, a.z + side.z}};
+    const float uvs[4][2] = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
+    moment->world_quad(corners, uvs, stripTexture, IM_COL32_WHITE);
+
+    // An icon facing the camera, one metre across.
+    moment->world_billboard(iconPosition, 0.5f, 0.5f, iconTexture, IM_COL32_WHITE);
+
+    // A label beside it, flat over the world, as before.
+    moment->draw_list->AddText(labelPosition, IM_COL32_WHITE, "Label");
+    DrawnInMoment = true;
+}
+```
+
+The texture is what `AddImageQuad` takes, or null for a plain colour. The quads are drawn after your callback returns,
+in the order you called, and before `draw_list`. The two calls are null outside the world (`MOMENT_BEFORE_WINDOWS`
+on) and while there is no camera, so draw on `draw_list` then, or fall back to Nexus.
+
 ### Falling back to Nexus
 
 Keep drawing in Nexus's render callback, but only on frames the service did not draw:
@@ -145,9 +176,9 @@ In frame order. The header says what each one is drawn over and under.
 | Moment | Use it for |
 |---|---|
 | `MOMENT_AFTER_OPAQUE` | geometry the game's ground telegraphs should paint over |
-| `MOMENT_AFTER_DECALS` | ground markers, under water, particles and effects |
+| `MOMENT_AFTER_DECALS` | shapes on the ground, under water, particles and effects |
 | `MOMENT_SURFACE_END` | anything in the world that should go through post-processing |
-| `MOMENT_WORLD_FINISHED` | the finished world, before any UI |
+| `MOMENT_WORLD_FINISHED` | icons and shapes in the world, through `world_quad`: the finished world, before any UI |
 | `MOMENT_BEFORE_WINDOWS` | an overlay: over names and the HUD, under every window and the tooltip |
 | `MOMENT_UI_FINISHED` | over the game's whole UI, still under Nexus's and every addon's windows |
 
