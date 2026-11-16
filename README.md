@@ -1,5 +1,7 @@
 # GW2 Good Render
 
+<img width="2546" height="1108" alt="image" src="https://github.com/user-attachments/assets/509b2d32-6319-48e5-9576-ef21c8307428" />
+
 A [Nexus](https://raidcore.gg/Nexus) addon for Guild Wars 2 that lets other addons draw *inside* the game's frame.
 
 Nexus's render callback runs after the game has drawn everything. What an addon draws there covers the game's windows. 
