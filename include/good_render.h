@@ -57,6 +57,18 @@ struct Camera {
     float view_projection[16];
 };
 
+// Which of what the game drew in front of a quad in the world hides it: Moment::world_quad's last argument. Any other
+// value is HIDDEN_BEHIND_SCENE.
+enum HiddenBehind : uint32_t {
+    // Nothing: drawn over all of it, as draw_list is, but foreshortened as the world is.
+    HIDDEN_BEHIND_NOTHING = 0,
+    // Characters only, players and NPCs and the rest: shows through walls and hills, never through someone standing in
+    // front of it.
+    HIDDEN_BEHIND_CHARACTERS = 1,
+    // Everything solid the game drew, terrain, props and characters, as the world itself is.
+    HIDDEN_BEHIND_SCENE = 2,
+};
+
 // What a moment hands you. Valid only during your callback.
 struct Moment {
     uint32_t moment;  // MomentId
@@ -78,8 +90,9 @@ struct Moment {
     ID3D11DeviceContext* context;
 
     // The scene's prepass colour. Its alpha * 255 is 0 on most of the world, 1 where the game puts no decals, 3 on
-    // foliage and 5 on characters. In the game's UI it is a different size from what is bound: sample it by screen
-    // fraction there, not by pixel. Read it only, never bind it as a target.
+    // foliage and 5 on characters. From AFTER_OPAQUE on it is a copy taken there, since the game's own does not keep it
+    // to the end of the world, so it holds the same at every moment. In the game's UI it is a different size from what
+    // is bound: sample it by screen fraction there, not by pixel. Read it only, never bind it as a target.
     ID3D11ShaderResourceView* mask;
 
     // Opaque geometry's view depth divided by z_far, an R32_FLOAT. The sky reads 1. Sized like mask.
@@ -92,9 +105,10 @@ struct Moment {
     // past 0..1 repeats the texture.
     ImDrawList* draw_list;
 
-    // Like ImGui's AddImageQuad(), but at points in the world, in MumbleLink metres. Each pixel is hidden behind whatever
-    // the game drew in front of it (a wall, a hill, a character), which draw_list never is. Drawn after your callback
-    // returns, before draw_list, in the order you call it.
+    // Like ImGui's AddImageQuad(), but at points in the world, in MumbleLink metres, and drawn by the GPU: a texture across
+    // a quad running away from the camera foreshortens, where draw_list, being flat, spreads it evenly over the pixels.
+    // Each pixel is hidden behind what `hidden_behind` names of whatever the game drew in front of it, which draw_list
+    // never is. Drawn after your callback returns, before draw_list, in the order you call it.
     //
     // `texture` is what AddImageQuad() takes, an ID3D11ShaderResourceView*, or null for a plain colour. `colour` is an
     // IM_COL32. The corners go round the quad in either direction, with uvs[i] at corners[i]; null uvs map the whole
@@ -102,17 +116,21 @@ struct Moment {
     // A quad with a point that is not finite is dropped. Keep the texture alive until unsubscribe() returns.
     //
     // Null outside the world (BEFORE_WINDOWS on) and when there is no camera: use draw_list then.
-    void (*world_quad)(const float corners[4][3], const float uvs[4][2], void* texture, uint32_t colour);
+    void (*world_quad)(const float corners[4][3], const float uvs[4][2], void* texture, uint32_t colour, HiddenBehind hidden_behind);
     // A world_quad facing the camera, like an icon: the whole texture, `half_width` and `half_height` metres from
     // `centre` each way. Null when world_quad is.
-    void (*world_billboard)(const float centre[3], float half_width, float half_height, void* texture, uint32_t colour);
+    void (*world_billboard)(const float centre[3], float half_width, float half_height, void* texture, uint32_t colour,
+                            HiddenBehind hidden_behind);
 };
 
 using Callback = void (*)(const Moment* moment);
 
-// This header's Moment. Moment only grows at its end, and a field never changes meaning, so a newer service can still
-// call you: you read only the fields you know. Raised whenever Moment changes.
-constexpr uint32_t MOMENT_VERSION = 1;
+// This header's Moment, raised whenever Moment changes. 
+// The service will hand each subscriber the Moment of the version it was built against, up to oldest_served.
+// Anything not matching newest_served is considered deprecated and may be removed anytime.
+//
+// 2: Added `hidden_behind` parameter to `world_quad` and `world_billboard`.
+constexpr uint32_t MOMENT_VERSION = 2;
 
 // More slots than there will be addons.
 constexpr int MOST_SUBSCRIBERS = 64;

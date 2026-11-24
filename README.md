@@ -101,8 +101,11 @@ honoured.
 
 A draw list is flat: it draws over everything, so a shape behind a wall shows through it. At the world's moments,
 `moment->world_quad` and `moment->world_billboard` draw ImGui's textured quads at points in the world instead, in
-MumbleLink's metres. Each pixel is hidden wherever the game drew something solid in front of it, with no depth to
-handle on your side.
+MumbleLink's metres, through the GPU. Each says what hides it, with no depth to handle on your side:
+
+- `HIDDEN_BEHIND_SCENE`: whatever solid the game drew in front of it, as the world itself is.
+- `HIDDEN_BEHIND_CHARACTERS`: only a character in front of it. It shows through walls and hills.
+- `HIDDEN_BEHIND_NOTHING`: nothing, as a draw list, but foreshortened.
 
 ```cpp
 void OnMoment(const good_render::Moment* moment) {
@@ -113,10 +116,10 @@ void OnMoment(const good_render::Moment* moment) {
     const float corners[4][3] = {{a.x - side.x, a.y, a.z - side.z}, {b.x - side.x, b.y, b.z - side.z},
                                  {b.x + side.x, b.y, b.z + side.z}, {a.x + side.x, a.y, a.z + side.z}};
     const float uvs[4][2] = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
-    moment->world_quad(corners, uvs, stripTexture, IM_COL32_WHITE);
+    moment->world_quad(corners, uvs, stripTexture, IM_COL32_WHITE, good_render::HIDDEN_BEHIND_SCENE);
 
-    // An icon facing the camera, one metre across.
-    moment->world_billboard(iconPosition, 0.5f, 0.5f, iconTexture, IM_COL32_WHITE);
+    // An icon facing the camera, one metre across, seen through walls.
+    moment->world_billboard(iconPosition, 0.5f, 0.5f, iconTexture, IM_COL32_WHITE, good_render::HIDDEN_BEHIND_CHARACTERS);
 
     // A label beside it, flat over the world, as before.
     moment->draw_list->AddText(labelPosition, IM_COL32_WHITE, "Label");
@@ -199,8 +202,8 @@ Releases are tagged `vMajor.Minor.Build`, the form Nexus's updater reads.
 
 Every addon shares one block, whatever header it was built against. Each subscriber's slot carries the
 `good_render::MOMENT_VERSION` of its header, and the service calls the versions it can hand its `Moment` to: its own,
-and older ones down to the oldest it still supports. `Moment` only grows at its end, so an older subscriber reads only
-the fields it knows.
+and older ones down to the oldest it still supports. Any MOMENT_VERSION that does not match the latest is to be considered
+deprecated and may be removed at any time.
 
 - **A subscriber the service does not serve is not called**, newer than the service or older than what it supports,
   and draws through Nexus as it would without the service. `good_render::served(*block)` says whether yours is called
