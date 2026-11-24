@@ -88,7 +88,8 @@ struct Moment {
     // An empty ImGui list to draw into, like Nexus's background list: in window pixels, with the font atlas bound and a
     // full-screen clip rectangle. It is drawn into the game's frame after your callback returns. Each command's
     // TextureId is an ID3D11ShaderResourceView*; clip rectangles and user callbacks are ignored. It is Nexus's ImGui
-    // 1.80, the one every Nexus addon shares.
+    // 1.80, the one every Nexus addon shares. Textures are sampled as Nexus's own lists are, linear and wrapping: a uv
+    // past 0..1 repeats the texture.
     ImDrawList* draw_list;
 
     // Like ImGui's AddImageQuad(), but at points in the world, in MumbleLink metres. Each pixel is hidden behind whatever
@@ -97,8 +98,8 @@ struct Moment {
     //
     // `texture` is what AddImageQuad() takes, an ID3D11ShaderResourceView*, or null for a plain colour. `colour` is an
     // IM_COL32. The corners go round the quad in either direction, with uvs[i] at corners[i]; null uvs map the whole
-    // texture, (0,0) (1,0) (1,1) (0,1). A quad with a point that is not finite is dropped. Keep the texture alive until
-    // unsubscribe() returns.
+    // texture, (0,0) (1,0) (1,1) (0,1). Sampled as draw_list is, so uvs past 0..1 repeat the texture across the quad.
+    // A quad with a point that is not finite is dropped. Keep the texture alive until unsubscribe() returns.
     //
     // Null outside the world (BEFORE_WINDOWS on) and when there is no camera: use draw_list then.
     void (*world_quad)(const float corners[4][3], const float uvs[4][2], void* texture, uint32_t colour);
