@@ -147,8 +147,7 @@ with no gap: a loading screen, the full map, or the service not loaded at all.
 
 ### The camera
 
-`moment->camera` is the camera the frame was drawn with, in MumbleLink's space (metres, y up). It is null when there is
-no camera: before MumbleLink is written, and while the full map is open.
+`moment->camera` is the camera the frame was drawn with, in MumbleLink's space (metres, y up).
 
 Use it instead of reading MumbleLink during the moment. The game draws a frame behind the game thread that writes
 MumbleLink, so a camera read then is one frame ahead of the world it would draw over, and shapes on the ground slip

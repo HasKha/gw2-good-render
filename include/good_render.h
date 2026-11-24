@@ -66,7 +66,7 @@ struct Moment {
     uint32_t height;
     // The far plane linear_depth is divided by, in metres: view depth is linear_depth * z_far.
     float z_far;
-    // Camera can be null: before MumbleLink is written, and while the full map is open.
+    // Camera can be null, before MumbleLink is written.
     const Camera* camera;
     // How many of the bound target's pixels make one window pixel: 1 in the game's UI.
     float pixels_per_window_pixel;
