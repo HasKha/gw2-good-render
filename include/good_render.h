@@ -69,6 +69,33 @@ enum HiddenBehind : uint32_t {
     HIDDEN_BEHIND_SCENE = 2,
 };
 
+// Where the full map is in its open or its close: Map::transition.
+enum MapTransition : uint32_t {
+    MAP_OPENING = 0,
+    // Open, once the open has played out. No moment comes while the map covers the world, which the game then stops
+    // drawing: from here until the close begins, draw over the map from Nexus, with MumbleLink's Context.Compass.
+    MAP_OPEN = 1,
+    MAP_CLOSING = 2,
+};
+
+// The full map as the game draws it in the frame being drawn, through its open and its close: what MumbleLink's
+// Context.Compass leaves out, taken at Present as the camera is.
+struct Map {
+    uint32_t transition;  // MapTransition
+    // 0 closed to 1 open, linear in time over the 0.6 s the open takes. The close runs it back from 1, once the map has
+    // gone back to where it opened.
+    float progress;
+    // The map's view as MumbleLink's Context.Compass.Center and Scale give it, the same numbers read where the game keeps
+    // them: put a point of the continent on the window as you would with those.
+    float centre[2];
+    float scale;
+    // How much the game magnifies the map it draws, about the window's centre: what centre and scale put at window
+    // pixel p is drawn at c + zoom * (p - c), c the window's centre. 20 as the open begins, 1 once open.
+    float zoom;
+    // The map's opacity, 0 to 1: draw what is on the map at it, and it comes and goes with the map.
+    float fade;
+};
+
 // What a moment hands you. Valid only during your callback.
 struct Moment {
     uint32_t moment;  // MomentId
@@ -121,6 +148,10 @@ struct Moment {
     // `centre` each way. Null when world_quad is.
     void (*world_billboard)(const float centre[3], float half_width, float half_height, void* texture, uint32_t colour,
                             HiddenBehind hidden_behind);
+
+    // The full map while the game draws it over the world, opening or closing. Null with no map up, and while one is but
+    // could not be read.
+    const Map* map;
 };
 
 using Callback = void (*)(const Moment* moment);
@@ -130,7 +161,8 @@ using Callback = void (*)(const Moment* moment);
 // Anything not matching newest_served is considered deprecated and may be removed anytime.
 //
 // 2: Added `hidden_behind` parameter to `world_quad` and `world_billboard`.
-constexpr uint32_t MOMENT_VERSION = 2;
+// 3: Added `map`.
+constexpr uint32_t MOMENT_VERSION = 3;
 
 // More slots than there will be addons.
 constexpr int MOST_SUBSCRIBERS = 64;
